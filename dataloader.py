@@ -41,17 +41,15 @@ class VideoDataset(Dataset):
         print('max sequence length in data is', self.max_len)
 
         self.filelist = [f for f in listdir(self.i3d_feats_dir) if isfile(join(self.i3d_feats_dir, f))]
+        print(len(self.filelist))
 
     def __getitem__(self, ix):
         """This function returns a tuple that is further passed to collate_fn
         """
-
-        #__PYrzYbzKE_000195_000205.npy
-        #i3d_feat = np.load(os.path.join(self.i3d_feats_dir, '__PYrzYbzKE_000195_000205.npy'))
         (file, ext) = self.filelist[ix].split('.')
 
         i3d_feat = np.load(os.path.join(self.i3d_feats_dir, self.filelist[ix]))
-        i3d_feat = np.mean(i3d_feat, axis=0, keepdims=True)
+        #i3d_feat = np.mean(i3d_feat, axis=0, keepdims=True)
 
         label = np.zeros(self.max_len)
         mask = np.zeros(self.max_len)
