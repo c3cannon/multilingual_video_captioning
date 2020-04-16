@@ -29,6 +29,7 @@ class Attention(nn.Module):
         """
         batch_size, seq_len, _ = encoder_outputs.size()
         hidden_state = hidden_state.unsqueeze(1).repeat(1, seq_len, 1)
+        #hidden_state = hidden_state.repeat(1, seq_len, 1)
         inputs = torch.cat((encoder_outputs, hidden_state),
                            2).view(-1, self.dim * 2)
         o = self.linear2(F.tanh(self.linear1(inputs)))

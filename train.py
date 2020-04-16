@@ -22,37 +22,48 @@ def train(loader, model, crit, optimizer, lr_scheduler, opt, rl_crit=None):
         lr_scheduler.step()
 
         iteration = 0
-        #init_cider_scorer(opt["cached_tokens"])
+
+        # If start self crit training
+        if opt["self_crit_after"] != -1 and epoch >= opt["self_crit_after"]:
+            sc_flag = True
+            init_cider_scorer(opt["cached_tokens"])
+        else:
+            sc_flag = False
+
 
         for data in loader:
             #torch.cuda.synchronize()
-            i3d_feats = data['i3d_feats'] #.cuda()
+            i3d_feats = data['i3d_feats'].squeeze(1) #.cuda()
             labels = data['labels'] #.cuda()
             masks = data['masks'] #.cuda()
 
-            optimizer.zero_grad()
-
-            seq_probs, _ = model(i3d_feats, labels, 'train')
-            loss = crit(seq_probs, labels[:, 1:], masks[:, 1:])
-            '''
-            seq_probs, seq_preds = model(i3d_feats, mode='inference', opt=opt)
-            reward = get_self_critical_reward(model, i3d_feats, data, seq_preds)
-            print(reward.shape)
-            loss = rl_crit(seq_probs, seq_preds, torch.from_numpy(reward).float()) #.cuda()
-            '''
+            if not sc_flag:
+                seq_probs, _ = model(i3d_feats, labels, 'train')
+                loss = crit(seq_probs, labels[:, 1:], masks[:, 1:])
+            else:
+                seq_probs, seq_preds = model(
+                    i3d_feats, mode='inference', opt=opt)
+                reward = get_self_critical_reward(model, i3d_feats, data,
+                                                  seq_preds)
+                print(reward.shape)
+                loss = rl_crit(seq_probs, seq_preds,
+                               torch.from_numpy(reward).float()) #.cuda())
+            
             loss.backward()
             clip_grad_value_(model.parameters(), opt['grad_clip'])
             optimizer.step()
             train_loss = loss.item()
             #torch.cuda.synchronize()
-            iteration += 1
 
+            iteration += 1
+            
             if not sc_flag:
                 print("iter %d (epoch %d), train_loss = %.6f" %
                       (iteration, epoch, train_loss))
             else:
                 print("iter %d (epoch %d), avg_reward = %.6f" %
                       (iteration, epoch, np.mean(reward[:, 0])))
+            
 
         if epoch % opt["save_checkpoint_every"] == 0:
             model_path = os.path.join(opt["checkpoint_path"],
@@ -100,7 +111,6 @@ def main(opt):
         gamma=opt["learning_rate_decay_rate"])
 
     train(dataloader, model, crit, optimizer, exp_lr_scheduler, opt, rl_crit)
-
 
 if __name__ == '__main__':
     opt = opts.parse_opt()

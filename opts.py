@@ -7,24 +7,24 @@ def parse_opt():
     parser.add_argument(
         '--caption_json',
         type=str,
-        default="caption_eng.json",
+        default="caption_train_english.json",
         help='path to the processed video caption json')
     parser.add_argument(
         '--input_json',
         type=str,
-        default='vatex_public_test_english.json',
+        default='vatex_training.json',
         help='path to the json file containing video info')
     parser.add_argument(
         '--info_json',
         type=str,
-        default='info.json',
+        default='info_train_english.json',
         help='path to the json file containing additional info and vocab')
 
-    parser.add_argument('--i3d_feats_dir', type=str, default="public_test")
+    parser.add_argument('--i3d_feats_dir', type=str, default="train_val_data")
     parser.add_argument(
         '--cached_tokens',
         type=str,
-        default='msr-all-idxs',
+        default='vatex_training-idxs',
         help='Cached token file for calculating cider score \
                             during self critical training.')
 
@@ -129,6 +129,13 @@ def parse_opt():
         type=int,
         default=30,
         help='vocabulary size of each caption'
+    )
+    parser.add_argument(
+        '--self_crit_after',
+        type=int,
+        default=-1,
+        help='After what epoch do we start finetuning the CNN? \
+                        (-1 = disable; never finetune, 0 = finetune from start)'
     )
 
     args = parser.parse_args()
