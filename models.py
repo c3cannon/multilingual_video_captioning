@@ -31,6 +31,7 @@ class EncoderRNN(nn.Module):
         self.input_dropout = nn.Dropout(input_dropout_p)
 
         if rnn_cell.lower() == 'lstm':
+            print("LSTM")
             self.rnn_cell = nn.LSTM
         elif rnn_cell.lower() == 'gru':
             self.rnn_cell = nn.GRU
@@ -54,13 +55,17 @@ class EncoderRNN(nn.Module):
             - **output** (batch, seq_len, hidden_size): variable containing the encoded features of the input sequence
             - **hidden** (num_layers * num_directions, batch, hidden_size): variable containing the features in the hidden state h
         """
-        vid_feats = vid_feats[1,:]
-        batch_size, seq_len, dim_vid = vid_feats.size()
+
+        _, batch_size, seq_len, dim_vid = vid_feats.size()
         vid_feats = self.vid2hid(vid_feats.view(-1, dim_vid))
         vid_feats = self.input_dropout(vid_feats)
         vid_feats = vid_feats.view(batch_size, seq_len, self.dim_hidden)
         self.rnn.flatten_parameters()
         output, hidden = self.rnn(vid_feats)
+        '''
+        if(isinstance(hidden, tuple)):
+            hidden = hidden[0]
+        '''
         return output, hidden
 
 class DecoderRNN(nn.Module):
@@ -137,6 +142,7 @@ class DecoderRNN(nn.Module):
 
         batch_size, _, _ = encoder_outputs.size()
         decoder_hidden = self._init_rnn_state(encoder_hidden)
+        print(decoder_hidden[1].size())
 
         seq_logprobs = []
         seq_preds = []
@@ -144,13 +150,14 @@ class DecoderRNN(nn.Module):
         if mode == 'train':
             # use targets as rnn inputs
             targets_emb = self.embedding(targets)
-            print(targets_emb.size())
             for i in range(self.max_length - 1):
                 current_words = targets_emb[:, i, :]
-                context = self.attention(decoder_hidden.squeeze(0), encoder_outputs)
-                print(context)
+                if self.rnn_cell == 'lstm':
+                    context = self.attention(decoder_hidden.squeeze(0), encoder_outputs)
+                elif self.rnn_cell == 'gru':
+                    context = self.attention(decoder_hidden[0].squeeze(0), encoder_outputs)
+
                 decoder_input = torch.cat([current_words, context], dim=1)
-                #print(decoder_input.size())
                 decoder_input = self.input_dropout(decoder_input).unsqueeze(1)
                 decoder_output, decoder_hidden = self.rnn(decoder_input, decoder_hidden)
                 logprobs = F.log_softmax(self.out(decoder_output.squeeze(1)), dim=1)
@@ -167,7 +174,7 @@ class DecoderRNN(nn.Module):
                     decoder_hidden.squeeze(0), encoder_outputs)
 
                 if t == 0:  # input <bos>
-                    it = torch.LongTensor([self.sos_id] * batch_size).cuda()
+                    it = torch.LongTensor([self.sos_id] * batch_size) #.cuda()
                 elif sample_max:
                     sampleLogprobs, it = torch.max(logprobs, 1)
                     seq_logprobs.append(sampleLogprobs.view(-1, 1))
@@ -180,7 +187,7 @@ class DecoderRNN(nn.Module):
                     else:
                         # scale logprobs by temperature
                         prob_prev = torch.exp(torch.div(logprobs, temperature))
-                    it = torch.multinomial(prob_prev, 1).cuda()
+                    it = torch.multinomial(prob_prev, 1) #.cuda()
                     sampleLogprobs = logprobs.gather(1, it)
                     seq_logprobs.append(sampleLogprobs.view(-1, 1))
                     it = it.view(-1).long()
@@ -250,7 +257,8 @@ class S2VTModel(nn.Module):
 
     def forward(self, vid_feats, target_variable=None, mode='train', opt={}):
         
-        vid_feats = vid_feats[1,:]
+        print(vid_feats.size())
+        #vid_feats = vid_feats[1,:]
 
         batch_size, n_frames, _ = vid_feats.shape
         padding_words = Variable(vid_feats.data.new(batch_size, n_frames, self.dim_word)).zero_()
