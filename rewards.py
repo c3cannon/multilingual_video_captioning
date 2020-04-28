@@ -2,8 +2,8 @@ import numpy as np
 from collections import OrderedDict
 import torch
 import sys
-#sys.path.append("coco-caption")
-from ciderD import CiderD
+sys.path.append("coco-caption")
+from pyciderevalcap.ciderD.ciderD import CiderD
 
 CiderD_scorer = None
 # CiderD_scorer = CiderD(df='corpus')
