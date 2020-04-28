@@ -47,7 +47,7 @@ def main(params):
             video_caption[i['videoID']] = {'captions': []}
         for cap in i['enCap']:
             video_caption[i['videoID']]['captions'].append(cap)
-
+            
     # create the vocab
     vocab = build_vocab(video_caption, params)
     itow = {i + 2: w for i, w in enumerate(vocab)}
@@ -74,12 +74,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     # input json
-    parser.add_argument('--input_json', type=str, default='vatex_public_test_english.json',
+    parser.add_argument('--input_json', type=str, default='vatex_training.json',
                         help='VATEX training data json')
 
-    parser.add_argument('--info_json', default='info.json',
+    parser.add_argument('--info_json', default='info_train_chinese.json',
                         help='info about iw2word and word2ix')
-    parser.add_argument('--caption_json', default='caption_eng.json', help='caption json file')
+    parser.add_argument('--caption_json', default='caption_train_chinese.json', help='caption json file')
 
 
     parser.add_argument('--word_count_threshold', default=1, type=int,

@@ -7,29 +7,29 @@ def parse_opt():
     parser.add_argument(
         '--input_json',
         type=str,
-        default='vatex_training.json',
+        default='vatex_validation.json',
         help='path to the json file containing video info')
 
     parser.add_argument(
         '--eng_caption_json',
         type=str,
-        default="caption_train_english.json",
+        default="caption_val_english.json",
         help='path to the processed video caption json')
     parser.add_argument(
         '--eng_info_json',
         type=str,
-        default='info_train_english.json',
+        default='info_val_english.json',
         help='path to the json file containing additional info and vocab')
 
     parser.add_argument(
         '--chin_caption_json',
         type=str,
-        default="caption_train_chinese.json",
+        default="caption_val_chinese.json",
         help='path to the processed video caption json')
     parser.add_argument(
         '--chin_info_json',
         type=str,
-        default='info_train_chinese.json',
+        default='info_val_chinese.json',
         help='path to the json file containing additional info and vocab')
 
     parser.add_argument('--i3d_feats_dir', type=str, default="train_val_data")
@@ -50,15 +50,10 @@ def parse_opt():
         default=28,
         help='max length of captions(containing <sos>,<eos>)')
     parser.add_argument(
-        "--bidirectional_enc",
-        type=int,
-        default=1,
-        help="0 for disable, 1 for enable. encoder bidirectional.")
-    parser.add_argument(
-        "--bidirectional_dec",
+        "--bidirectional",
         type=int,
         default=0,
-        help="0 for disable, 1 for enable. decoder bidirectional.")
+        help="0 for disable, 1 for enable. encoder/decoder bidirectional.")
     parser.add_argument(
         '--dim_hidden',
         type=int,
@@ -153,6 +148,27 @@ def parse_opt():
         default=-1,
         help='After what epoch do we start finetuning the CNN? \
                         (-1 = disable; never finetune, 0 = finetune from start)'
+    )
+
+    parser.add_argument('--saved_model', type=str, default='save/model_LSTM_both10.pth',
+                        help='path to saved model to evaluate'
+    )
+    parser.add_argument('--dump_json', type=int, default=1,
+                        help='Dump json with predictions into vis folder? (1=yes,0=no)'
+    )
+    parser.add_argument('--results_path', type=str, default='results/')
+    parser.add_argument('--dump_path', type=int, default=0,
+                        help='Write video paths along with predictions into vis json? (1=yes,0=no)'
+    )
+    parser.add_argument('--gpu', type=str, default='0',
+                        help='gpu device number'
+    )
+    parser.add_argument('--sample_max', type=int, default=1,
+                        help='0/1. whether sample max probs  to get next word in inference stage'
+    )
+    parser.add_argument('--temperature', type=float, default=1.0)
+    parser.add_argument('--beam_size', type=int, default=1,
+                        help='used when sample_max = 1. Usually 2 or 3 works well.'
     )
 
     args = parser.parse_args()

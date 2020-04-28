@@ -1,3 +1,4 @@
+
 import torch
 from torch import nn
 import torch.nn as nn
@@ -56,7 +57,7 @@ class EncoderRNN(nn.Module):
             - **hidden** (num_layers * num_directions, batch, hidden_size): variable containing the features in the hidden state h
         """
 
-        _, batch_size, seq_len, dim_vid = vid_feats.size()
+        batch_size, seq_len, dim_vid = vid_feats.size()
         vid_feats = self.vid2hid(vid_feats.view(-1, dim_vid))
         vid_feats = self.input_dropout(vid_feats)
         vid_feats = vid_feats.view(batch_size, seq_len, self.dim_hidden)
@@ -142,7 +143,6 @@ class DecoderRNN(nn.Module):
 
         batch_size, _, _ = encoder_outputs.size()
         decoder_hidden = self._init_rnn_state(encoder_hidden)
-        print(decoder_hidden[1].size())
 
         seq_logprobs = []
         seq_preds = []
@@ -150,12 +150,13 @@ class DecoderRNN(nn.Module):
         if mode == 'train':
             # use targets as rnn inputs
             targets_emb = self.embedding(targets)
+
             for i in range(self.max_length - 1):
                 current_words = targets_emb[:, i, :]
-                if self.rnn_cell == 'lstm':
-                    context = self.attention(decoder_hidden.squeeze(0), encoder_outputs)
-                elif self.rnn_cell == 'gru':
+                if isinstance(decoder_hidden, tuple):
                     context = self.attention(decoder_hidden[0].squeeze(0), encoder_outputs)
+                else:
+                    context = self.attention(decoder_hidden.squeeze(0), encoder_outputs)
 
                 decoder_input = torch.cat([current_words, context], dim=1)
                 decoder_input = self.input_dropout(decoder_input).unsqueeze(1)
@@ -170,8 +171,10 @@ class DecoderRNN(nn.Module):
                 return self.sample_beam(encoder_outputs, decoder_hidden, opt)
 
             for t in range(self.max_length - 1):
-                context = self.attention(
-                    decoder_hidden.squeeze(0), encoder_outputs)
+                if isinstance(decoder_hidden, tuple):
+                    context = self.attention(decoder_hidden[0].squeeze(0), encoder_outputs)
+                else:
+                    context = self.attention(decoder_hidden.squeeze(0), encoder_outputs)
 
                 if t == 0:  # input <bos>
                     it = torch.LongTensor([self.sos_id] * batch_size) #.cuda()
