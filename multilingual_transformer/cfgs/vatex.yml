@@ -1,0 +1,9 @@
+# dataset specific settings for anet
+dataset: "vatex"
+train_dataset_file: "../../data/subsample/vatex_subsample_training_v1.0.json"
+train_data_folder: "../../data/subsample/train/"
+val_dataset_file: "../../data/subsample/vatex_subsample_validation_v1.0.json"
+val_data_folder: "../../data/subsample/val/"
+feature_root: "../../data/val/"
+batch_size: 128
+logfile: "transformer_cap.log"
