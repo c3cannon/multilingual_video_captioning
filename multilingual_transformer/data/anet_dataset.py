@@ -18,8 +18,9 @@ import string
 import torch
 import torchtext
 from torch.utils.data import Dataset
-
 import torch.nn.functional as F
+
+import jieba
 
 TABLE = str.maketrans('', '', string.punctuation)
 
@@ -41,7 +42,7 @@ def process_data(dataset_file):
         nvideos += 1
         for ind, (en_ann, ch_ann) in enumerate(zip(en_anns, ch_anns)):
             en_ann = " ".join([w.translate(TABLE) for w in en_ann.strip().lower()])
-            ch_ann = " ".join([w.translate(TABLE) for w in ch_ann.strip().lower()])
+            ch_ann = " ".join(jieba.cut(ch_ann.strip(), cut_all=False))
             # if split == "training":
             #     train_sentences.append(ann['sentence'])
             sentences.append(en_ann)

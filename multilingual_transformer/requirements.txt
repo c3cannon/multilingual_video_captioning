@@ -6,3 +6,4 @@ numpy==1.18.1
 pycocotools==2.0.0
 PyYAML==5.3.1
 Cython==0.29.17
+jieba==0.42.1
