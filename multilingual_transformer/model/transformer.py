@@ -5,8 +5,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 
-from data_helpers import vocab
-from data_helpers import data_loader_ks as data_loader
+from data import data_loader_ks as data_loader
 import model.utils_models as utils
 
 
