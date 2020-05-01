@@ -223,15 +223,16 @@ def get_model(text_proc, args):
 
     # Ship the model to GPU, maybe
     if torch.cuda.is_available():
-        if args.distributed:
-            model.cuda()
-            model = torch.nn.parallel.DistributedDataParallel(model)
-        else:
-            model = torch.nn.DataParallel(model).cuda()
-        # elif torch.cuda.device_count() > 1:
-        #     model = torch.nn.DataParallel(model).cuda()
+        model.cuda()
+        # if args.distributed:
+          #   model.cuda()
+            # model = torch.nn.parallel.DistributedDataParallel(model)
         # else:
-        #     model.cuda()
+          #   model = torch.nn.DataParallel(model).cuda()
+        # elif torch.cuda.device_count() > 1:
+          #   model = torch.nn.DataParallel(model).cuda()
+        # else:
+            # model.cuda()
     return model
 
 
@@ -429,7 +430,6 @@ def train(epoch, model, optimizer, language, train_loader, len_vocab, args):
             t_model_end - t_iter_start
         ))
         t_iter_start = time.time()
-        break
 
     epoch_loss = epoch_loss/nbatches
 
