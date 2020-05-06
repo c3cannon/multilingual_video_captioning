@@ -23,12 +23,10 @@ import pickle
 import numpy as np
 import nltk
 from PIL import Image
-from data_helpers.vocab import Vocabulary
-from pycocotools.coco import COCO
+# from pycocotools.coco import COCO
 
 # import h5py
 import argparse
-import pickle
 
 def indexto1hot(vocab_len, index):
     #print("index type: ")
