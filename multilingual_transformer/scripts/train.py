@@ -122,14 +122,18 @@ if torch.cuda.is_available():
 
 def get_dataset(args):
     # process text
-    text_proc, train_raw_data, val_raw_data = get_vocab_and_sentences(args.train_dataset_file, verbose=False)
+    en_text_proc, en_train_raw_data, en_val_raw_data = get_vocab_and_sentences(args.train_dataset_file, 
+        "en", verbose=False)
+    ch_text_proc, ch_train_raw_data, ch_val_raw_data = get_vocab_and_sentences(args.train_dataset_file, 
+        "ch", verbose=False)
 
-    print("len vocab:", len(text_proc.vocab))
+    print("len en vocab:", len(en_text_proc.vocab))
+    print("len ch vocab:", len(ch_text_proc.vocab))
 
     # Create the dataset and data loader instance
     en_train_dataset = ANetDataset(args.feature_root,
                                 args.train_data_folder,
-                                text_proc, train_raw_data,
+                                en_text_proc, en_train_raw_data,
                                 language="en",
                                 save_samplelist=args.save_train_samplelist,
                                 load_samplelist=args.load_train_samplelist,
@@ -137,7 +141,7 @@ def get_dataset(args):
                                 verbose=False)
     ch_train_dataset = ANetDataset(args.feature_root,
                                 args.train_data_folder,
-                                text_proc, train_raw_data,
+                                ch_text_proc, ch_train_raw_data,
                                 language="ch",
                                 save_samplelist=args.save_train_samplelist,
                                 load_samplelist=args.load_train_samplelist,
@@ -170,7 +174,7 @@ def get_dataset(args):
 
     en_valid_dataset = ANetDataset(args.feature_root,
                                 args.val_data_folder,
-                                text_proc, val_raw_data,
+                                en_text_proc, en_val_raw_data,
                                 language="en",
                                 dset="validation",
                                 save_samplelist=args.save_valid_samplelist,
@@ -186,7 +190,7 @@ def get_dataset(args):
    
     ch_valid_dataset = ANetDataset(args.feature_root,
                                 args.val_data_folder,
-                                text_proc, val_raw_data,
+                                ch_text_proc, ch_val_raw_data,
                                 language="ch",
                                 dset="validation",
                                 save_samplelist=args.save_valid_samplelist,

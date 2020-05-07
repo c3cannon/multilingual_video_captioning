@@ -23,63 +23,73 @@ import torch.nn.functional as F
 
 import jieba
 
-def process_data(dataset_file):
+def process_ch(ch_ann):
+    ch_ann = re.sub("[\s+\.\!\/_,$%^*(+\"\']+|[+——！，。？、~@#￥%……&*（）]+", "", ch_ann)
+    ch_ann = re.sub("[【】╮╯▽╰╭★→「」]+","",ch_ann)
+    ch_ann = re.sub("！，❤。～《》：（）【】「」？”“；：、","",ch_ann)
+    ch_ann = " ".join(jieba.cut(ch_ann.translate(str.maketrans('', '', string.punctuation)),
+     cut_all=False))
+    return ch_ann
 
-    print("DATASET_FILE:", dataset_file)
+
+def process_data(dataset_file, language):
+
+    print("{} DATASET_FILE: {}".format(language, dataset_file))
     # process train or validation dataset
 
     sentences = []
     seen = set()
     nvideos = 0
 
+    process_ann = lambda x: x.strip()
+    if language == "ch":
+        process_ann = process_ch
+    else:
+        process_ann = lambda x: x.translate(str.maketrans('', '', string.punctuation)).lower()
+
     with open(dataset_file, "r") as data_file:
         train_data = json.load(data_file)
 
     for row in train_data:
-        en_anns = row['enCap']
-        ch_anns = row["chCap"]
+        anns = row[language + 'Cap']
         nvideos += 1
-        for ind, (en_ann, ch_ann) in enumerate(zip(en_anns, ch_anns)):
-            en_ann = en_ann.translate(str.maketrans('', '', string.punctuation)).lower()
-            ch_ann = re.sub("[\s+\.\!\/_,$%^*(+\"\']+|[+——！，。？、~@#￥%……&*（）]+", "", ch_ann)
-            ch_ann = re.sub("[【】╮╯▽╰╭★→「」]+","",ch_ann)
-            ch_ann = re.sub("！，❤。～《》：（）【】「」？”“；：、","",ch_ann)
-            ch_ann = " ".join(jieba.cut(ch_ann.translate(str.maketrans('', '', string.punctuation)),
-             cut_all=False))
+        for ind, ann in enumerate(anns):
+            ann = process_ann(ann)
             # if split == "training":
             #     train_sentences.append(ann['sentence'])
-            sentences.append(en_ann)
-            sentences.append(ch_ann)
-            seen.add(en_ann)
+            sentences.append(ann)
+            seen.add(ann)
         row["subset"] = "train"
 
     with open(dataset_file.replace("training", "validation"), "r") as data_file:
         val_data = json.load(data_file)
 
     for row in val_data:
-        en_anns = row['enCap']
-        ch_anns = row["chCap"]
+        anns = row[language + 'Cap']
         nvideos += 1
-        for ind, (en_ann, ch_ann) in enumerate(zip(en_anns, ch_anns)):
-            en_ann = " ".join([w.translate(TABLE) for w in en_ann.strip().lower()])
-            ch_ann = " ".join([w.translate(TABLE) for w in ch_ann.strip().lower()])
+        for ind, ann in enumerate(anns):
+            ann = process_ann(ann)
             # if split == "training":
             #     train_sentences.append(ann['sentence'])
-            if en_ann not in seen:
-                sentences.append(en_ann)
-                sentences.append(ch_ann)
-                seen.add(en_ann)
+            if ann not in seen:
+                sentences.append(ann)
+                seen.add(ann)
         row["subset"] = "validation" 
+
+    null_sent = 0
+    for sent in sentences:
+        if sent is None:
+            null_sent += 1
 
     return sentences, nvideos, train_data, val_data
 
-def get_vocab_and_sentences(dataset_file, verbose=True):
+def get_vocab_and_sentences(dataset_file, language, verbose=True):
     # build vocab and tokenized sentences
     text_proc = torchtext.data.Field(sequential=True, init_token='<sos>',
                                 eos_token='<eos>',
                                 lower=True, batch_first=True)
 
-    sentences, nvideos, train_data, val_data = process_data(dataset_file)
+    sentences, nvideos, train_data, val_data = process_data(dataset_file, language)
 
     sentences_proc = list(map(text_proc.preprocess, sentences)) # build vocab on train only
     text_proc.build_vocab(sentences_proc)#, min_freq=5)
@@ -105,6 +115,12 @@ class ANetDataset(Dataset):
         if language != "en" and language != "ch":
             raise Exception("Error in language: {} not recognized".format(language))
 
+        self.process_ann = lambda x: x.strip()
+        if language == "en":
+            self.process_ann = lambda x: x.translate(str.maketrans('', '', string.punctuation)).lower()
+        else:
+            self.process_ann = process_ch
+
         if not load_samplelist:
             # self.en_sample_list = []  # list of list for data samples
             # self.ch_sample_list = []  # list of list for data samples
@@ -116,7 +132,7 @@ class ANetDataset(Dataset):
                 vid = val["videoID"]
                 if val['subset'] == dset and os.path.isfile(os.path.join(vid_path, vid + '.npy')):
                     for ann in annotations:
-                        ann = " ".join([w.translate(TABLE) for w in ann.strip().lower().split()])
+                        ann = self.process_ann(ann)
                         train_sentences.append(ann)
 
             train_sentences = list(map(text_proc.preprocess, train_sentences))
@@ -136,7 +152,7 @@ class ANetDataset(Dataset):
                     vid = row["videoID"]
                     if row["subset"] == dset and os.path.isfile(os.path.join(vid_path, vid + '.npy')):
                         for j, ann in enumerate(annotations):
-                            ann = " ".join([w.translate(TABLE) for w in ann.strip().lower().split()])
+                            ann = self.process_ann(ann)
                             results.append((os.path.join(vid_path, vid),
                                 ann, sentence_idx[sen_idx]))
                             sen_idx += 1
