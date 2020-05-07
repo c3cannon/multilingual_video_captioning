@@ -33,17 +33,24 @@ def make_sample(data_dir, json_file, frac, dest, stype):
 	    	os.path.join(fpath, vid))
 
 	subsample_json = [x for x in sentences if x["videoID"] + ".npy" in vid_ids]
-	with open(os.path.join(dest, "vatex_subsample_{}_v1.0.json".format(stype)), "w") as f:
-	    json.dump(subsample_json, f)
+	for sub in subsample_json:
+		sub["mode"] = stype
+
+	return subsample_json
 
 
 def main(args):
 
 	print("Writing training subsample...")
-	make_sample(args.data, args.train_json, args.frac, args.dest, "train")
+	train_json = make_sample(args.data, args.train_json, args.frac, args.dest, "train")
 
 	print("Writing validation subsample...")
-	make_sample(args.data, args.val_json, args.frac, args.dest, "val")
+	val_json = make_sample(args.data, args.val_json, args.frac, args.dest, "val")
+
+	print("Writing final json file...")
+	master_json = train_json.extend(val_json)
+	with open(os.path.join(dest, "vatex_subsample_v1.0.json".format(stype)), "w") as f:
+		json.dump(master_json, f)
 
 if __name__ == "__main__":
     main(args)
