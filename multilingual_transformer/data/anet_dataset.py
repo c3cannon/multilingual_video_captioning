@@ -14,6 +14,7 @@ import multiprocessing
 import pickle
 from random import shuffle, choice
 import string
+import re
 
 import torch
 import torchtext
@@ -21,8 +22,6 @@ from torch.utils.data import Dataset
 import torch.nn.functional as F
 
 import jieba
-
-TABLE = str.maketrans('', '', string.punctuation)
 
 def process_data(dataset_file):
 
@@ -41,8 +40,12 @@ def process_data(dataset_file):
         ch_anns = row["chCap"]
         nvideos += 1
         for ind, (en_ann, ch_ann) in enumerate(zip(en_anns, ch_anns)):
-            en_ann = " ".join([w.translate(TABLE) for w in en_ann.strip().lower()])
-            ch_ann = " ".join(jieba.cut(ch_ann.strip(), cut_all=False))
+            en_ann = en_ann.translate(str.maketrans('', '', string.punctuation)).lower()
+            ch_ann = re.sub("[\s+\.\!\/_,$%^*(+\"\']+|[+——！，。？、~@#￥%……&*（）]+", "", ch_ann)
+            ch_ann = re.sub("[【】╮╯▽╰╭★→「」]+","",ch_ann)
+            ch_ann = re.sub("！，❤。～《》：（）【】「」？”“；：、","",ch_ann)
+            ch_ann = " ".join(jieba.cut(ch_ann.translate(str.maketrans('', '', string.punctuation)),
+             cut_all=False))
             # if split == "training":
             #     train_sentences.append(ann['sentence'])
             sentences.append(en_ann)
@@ -80,10 +83,11 @@ def get_vocab_and_sentences(dataset_file, verbose=True):
 
     sentences_proc = list(map(text_proc.preprocess, sentences)) # build vocab on train only
     text_proc.build_vocab(sentences_proc)#, min_freq=5)
-    
+
     if verbose:
-        print('# of words in the train/val vocab: {}'.format(len(text_proc.vocab)))
-        print('# of train/val videos: {}'.format(nvideos))
+        print('# of words in the {} vocab: {}'.format(dataset_file,
+            len(text_proc.vocab)))
+        print('# of {} videos: {}'.format(dataset_file, nvideos))
 
     return text_proc, train_data, val_data
 
