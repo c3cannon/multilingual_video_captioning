@@ -205,14 +205,17 @@ def get_dataset(args):
                               collate_fn=anet_collate_fn)
 
     return ({"entrain":en_train_loader, "chtrain":ch_train_loader, 
-            "envalid":en_valid_loader, "chvalid":ch_valid_loader}, text_proc, train_sampler)
+            "envalid":en_valid_loader, "chvalid":ch_valid_loader}, en_text_proc, ch_text_proc, train_sampler)
 
 
-def get_model(text_proc, args):
-    sent_vocab = text_proc.vocab
-    model = Transformer(dict_size=len(sent_vocab),
+def get_model(en_text_proc, ch_text_proc, args):
+    en_sent_vocab = en_text_proc.vocab
+    ch_sent_vocab = ch_text_proc.vocab
+    model = Transformer(en_dict_size=len(en_sent_vocab),
+                        ch_dict_size=len(ch_sent_vocab),
                         image_feature_dim=args.image_feat_size,
-                        vocab=sent_vocab,
+                        en_vocab=en_sent_vocab,
+                        ch_vocab=ch_sent_vocab,
                         tf_ratio=args.teacher_forcing)
 
     # Initialize the networks and the criterion
@@ -248,10 +251,10 @@ def main(args):
 
     print("GPU available?", torch.cuda.is_available())
     print('loading dataset')
-    loader_dict, text_proc, train_sampler = get_dataset(args)
+    loader_dict, en_text_proc, ch_text_proc, train_sampler = get_dataset(args)
 
     print('building model')
-    model = get_model(text_proc, args)
+    model = get_model(en_text_proc, ch_text_proc, args)
 
     # filter params that don't require gradient (credit: PyTorch Forum issue 679)
     # smaller learning rate for the decoder
@@ -290,6 +293,7 @@ def main(args):
     all_training_losses = []
 
     curr_lang = "en"
+    text_proc = None
     for train_epoch in range(args.max_epochs):
 
         t_epoch_start = time.time()
@@ -297,8 +301,10 @@ def main(args):
         # switch language every other epoch
         if train_epoch % 2 == 0:
             curr_lang = "en"
+            text_proc = en_text_proc
         else:
             curr_lang = "ch"
+            text_proc = ch_text_proc
 
         print('Epoch: {} out of {}, language: {}'.format(train_epoch + 1, 
             args.max_epochs, curr_lang))
@@ -379,7 +385,7 @@ def train(epoch, model, optimizer, language, train_loader, len_vocab, args):
             img_batch, sentence_batch = img_batch.cuda(), sentence_batch.cuda()
 
         t_model_start = time.time()
-        y_out = model(img_batch, sentence_batch.size(1), sentence_batch)
+        y_out = model(language, img_batch, sentence_batch.size(1), sentence_batch)
         n_ex, vocab_len = y_out.view(-1, len_vocab).shape
 
         sentence_batch = sentence_batch[:,1:]
@@ -447,7 +453,7 @@ def valid(model, language, loader, text_proc, logger):
                 img_batch, sentence_batch = img_batch.cuda(), sentence_batch.cuda()
 
             t_model_start = time.time()
-            y_out = model(img_batch, sentence_batch.size(1), sentence_batch)
+            y_out = model(language, img_batch, sentence_batch.size(1), sentence_batch)
             n_ex, vocab_len = y_out.view(-1, len(text_proc.vocab)).shape
 
             sentence_batch = sentence_batch[:,1:]

@@ -20,53 +20,74 @@ NB_HIDDEN_ATT   = 512
 #               MAIN MODEL              #
 #########################################
 class Transformer(nn.Module):
-    def __init__(self, dict_size, image_feature_dim, vocab, tf_ratio):
+    def __init__(self, en_dict_size, ch_dict_size, image_feature_dim, en_vocab, ch_vocab, tf_ratio):
         super(Transformer, self).__init__()
-        self.dict_size = dict_size
+        self.en_dict_size = en_dict_size
+        self.ch_dict_size = ch_dict_size
         self.image_feature_dim = image_feature_dim
-        self.vocab = vocab
+        self.en_vocab = en_vocab
+        self.ch_vocab = ch_vocab
         self.tf_ratio = tf_ratio
 
-        self.embed_word = Embed_Word(dict_size, WORD_EMB_DIM)
+        self.en_embed_word = Embed_Word(en_dict_size, WORD_EMB_DIM)
+        self.ch_embed_word = Embed_Word(ch_dict_size, WORD_EMB_DIM)
         self.img_attention = Visual_Attention(image_feature_dim,
                                           WORD_EMB_DIM,
                                           NB_HIDDEN_ATT)
         self.word_attention = Visual_Attention(WORD_EMB_DIM,
                                           image_feature_dim,
                                           NB_HIDDEN_ATT)
-        self.predict_word = Predict_Word(image_feature_dim+WORD_EMB_DIM,
+        self.predict_en_word = Predict_Word(image_feature_dim+WORD_EMB_DIM,
                                          1024,
                                          2,
-                                         dict_size)
+                                         en_dict_size)
+        self.predict_ch_word = Predict_Word(image_feature_dim+WORD_EMB_DIM,
+                                         1024,
+                                         2,
+                                         ch_dict_size)
 
-    def forward(self, image_feats, nb_timesteps, true_words, beam=None):
+    def forward(self, language, image_feats, nb_timesteps, true_words, beam=None):
         if beam is not None:
-            return self.beam_search(image_feats, nb_timesteps, beam)
+            if language=="en":
+                return self.beam_search(self.en_vocab, image_feats, nb_timesteps, beam)
+            elif language=="ch":
+                return self.beam_search(self.ch_vocab, image_feats, nb_timesteps, beam)
 
         nb_batch, nb_image_feats, _ = image_feats.size()
         use_cuda = image_feats.is_cuda
 
         v_mean = image_feats.mean(dim=1)
 
-        state, current_word = self.init_inference(nb_batch, use_cuda)
-        y_out = utils.make_zeros((nb_batch, nb_timesteps-1, self.dict_size),
+        state, current_word = None, None
+        y_out = None
+        if language == "en":
+            state, current_word = self.init_inference(self.en_vocab, nb_batch, use_cuda)
+            y_out = utils.make_zeros((nb_batch, nb_timesteps-1, self.en_dict_size),
+                                 cuda = use_cuda)
+        if language == "ch":
+            state, current_word = self.init_inference(self.ch_vocab, nb_batch, use_cuda)
+            y_out = utils.make_zeros((nb_batch, nb_timesteps-1, self.ch_dict_size),
                                  cuda = use_cuda)
 
         for t in range(nb_timesteps-1):
-            y, state = self.forward_one_step(state,
+            y, state = self.forward_one_step(language, state,
                                              current_word,
                                              v_mean,
                                              image_feats)
             y_out[:,t,:] = y
 
-            current_word = self.update_current_word(y, true_words, t, use_cuda)
+            current_word = self.update_current_word(language, y, true_words, t, use_cuda)
 
         return y_out
 
-    def forward_one_step(self, state, current_word, v_mean, image_feats):
+    def forward_one_step(self, language, state, current_word, v_mean, image_feats):
         
         nb_batch, nb_image_feats, image_feat_dim = image_feats.size()
-        word_emb = self.embed_word(current_word).unsqueeze(0)
+        word_emb = None
+        if language == "ch":
+            word_emb = self.ch_embed_word(current_word).unsqueeze(0)
+        else:
+            word_emb = self.en_embed_word(current_word).unsqueeze(0)
 
         if state is None:
             state = word_emb
@@ -83,25 +104,34 @@ class Transformer(nn.Module):
         attended_images = self.img_attention(image_feats, attended_words)
         all_features = torch.cat((attended_words, attended_images), dim=1)
 
-        y = self.predict_word(all_features)
+        y = None
+        if language == "en":
+            y = self.predict_en_word(all_features)
+        else:
+            y = self.predict_ch_word(all_features)
         return y, word_emb
 
-    def update_current_word(self, y, true_words, t, cuda):
+    def update_current_word(self, language, y, true_words, t, cuda):
         use_tf = True if random.random() < self.tf_ratio else False
         if use_tf:
             next_word = true_words[:,t+1]
         else:
             next_word = torch.argmax(y, dim=1)
 
-        current_word = data_loader.indexto1hot(len(self.vocab), next_word)
-        current_word = torch.from_numpy(current_word).float()
+        current_word = None
+        if language == "en":
+            current_word = data_loader.indexto1hot(len(self.en_vocab), next_word)
+            current_word = torch.from_numpy(current_word).float()
+        if language == "ch":
+            current_word = data_loader.indexto1hot(len(self.ch_vocab), next_word)
+            current_word = torch.from_numpy(current_word).float()
         
         if cuda:
             current_word = current_word.cuda()
         return current_word
 
-    def init_inference(self, nb_batch, cuda):
-        start_word = data_loader.indexto1hot(len(self.vocab), self.vocab.stoi['<sos>'])
+    def init_inference(self, vocab, nb_batch, cuda):
+        start_word = data_loader.indexto1hot(len(vocab), vocab.stoi['<sos>'])
         start_word = torch.from_numpy(start_word).float().unsqueeze(0)
         start_word = start_word.repeat(nb_batch, 1)
 
@@ -114,7 +144,7 @@ class Transformer(nn.Module):
     #########################################
     #               BEAM SEARCH             #
     #########################################
-    def beam_search(self, image_features, max_nb_words, beam_width):
+    def beam_search(self, vocab, image_features, max_nb_words, beam_width):
         # Initialize model
         use_cuda = image_features.is_cuda
         nb_batch, nb_image_feats, _ = image_features.size()
@@ -123,7 +153,7 @@ class Transformer(nn.Module):
         state, current_word = self.init_inference(nb_batch, use_cuda)
 
         # Initialize beam search
-        end_word = data_loader.indexto1hot(len(self.vocab), self.vocab.stoi['<eos>'])
+        end_word = data_loader.indexto1hot(len(vocab), vocab.stoi['<eos>'])
         end_word = torch.from_numpy(end_word).float().unsqueeze(0)
         end_word = end_word.cuda() if image_features.is_cuda else end_word
         beam = Beam(beam_width)

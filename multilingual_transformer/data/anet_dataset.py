@@ -61,7 +61,7 @@ def process_data(dataset_file, language):
             seen.add(ann)
         row["subset"] = "train"
 
-    with open(dataset_file.replace("training", "validation"), "r") as data_file:
+    with open(dataset_file.replace("train", "val"), "r") as data_file:
         val_data = json.load(data_file)
 
     for row in val_data:
@@ -114,6 +114,9 @@ class ANetDataset(Dataset):
 
         if language != "en" and language != "ch":
             raise Exception("Error in language: {} not recognized".format(language))
+        print("LANGUAGE:", language)
+        print("split:", split)
+        print("len text_proc vocab:", len(text_proc.vocab))
 
         self.process_ann = lambda x: x.strip()
         if language == "en":
@@ -130,13 +133,15 @@ class ANetDataset(Dataset):
             for val in raw_data:
                 annotations = val[language + "Cap"]
                 vid = val["videoID"]
-                if val['subset'] == dset and os.path.isfile(os.path.join(vid_path, vid + '.npy')):
+                if val['subset'] == dset and os.path.isfile(os.path.join(split, vid + '.npy')):
                     for ann in annotations:
                         ann = self.process_ann(ann)
                         train_sentences.append(ann)
 
+            print("len train sents 1:", len(train_sentences))
             train_sentences = list(map(text_proc.preprocess, train_sentences))
 
+            print("len(train_sents):", len(train_sentences))
             sentence_idx = text_proc.numericalize(text_proc.pad(train_sentences))#,
                                                        # device=-1)  # put in memory
 
@@ -150,10 +155,10 @@ class ANetDataset(Dataset):
                 for i,row in enumerate(raw_data):
                     annotations = row[language + "Cap"]
                     vid = row["videoID"]
-                    if row["subset"] == dset and os.path.isfile(os.path.join(vid_path, vid + '.npy')):
+                    if row["subset"] == dset and os.path.isfile(os.path.join(split, vid + '.npy')):
                         for j, ann in enumerate(annotations):
                             ann = self.process_ann(ann)
-                            results.append((os.path.join(vid_path, vid),
+                            results.append((os.path.join(split, vid),
                                 ann, sentence_idx[sen_idx]))
                             sen_idx += 1
 
