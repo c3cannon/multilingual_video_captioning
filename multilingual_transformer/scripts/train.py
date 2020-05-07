@@ -127,9 +127,6 @@ def get_dataset(args):
     ch_text_proc, ch_train_raw_data, ch_val_raw_data = get_vocab_and_sentences(args.train_dataset_file, 
         "ch", verbose=False)
 
-    print("len en vocab:", len(en_text_proc.vocab))
-    print("len ch vocab:", len(ch_text_proc.vocab))
-
     # Create the dataset and data loader instance
     en_train_dataset = ANetDataset(args.feature_root,
                                 args.train_data_folder,
@@ -204,6 +201,9 @@ def get_dataset(args):
                               num_workers=args.num_workers,
                               collate_fn=anet_collate_fn)
 
+    print("size of English val dataset:", len(en_valid_dataset))
+    print("size of Chinese val dataset:", len(ch_valid_dataset))
+
     return ({"entrain":en_train_loader, "chtrain":ch_train_loader, 
             "envalid":en_valid_loader, "chvalid":ch_valid_loader}, en_text_proc, ch_text_proc, train_sampler)
 
@@ -245,7 +245,7 @@ def main(args):
         os.makedirs(args.checkpoint_path)
     except OSError as e:
         if e.errno == errno.EEXIST:
-            print('Directory already exists.')
+            print('Checkpoint directory already exists.')
         else:
             raise
 
@@ -386,16 +386,15 @@ def train(epoch, model, optimizer, language, train_loader, len_vocab, args):
 
         t_model_start = time.time()
         y_out = model(language, img_batch, sentence_batch.size(1), sentence_batch)
-        n_ex, vocab_len = y_out.view(-1, len_vocab).shape
 
-        sentence_batch = sentence_batch[:,1:]
-        decode_lengths = [x-1 for x in lengths]
+        # sentence_batch = sentence_batch[:,1:]
+        # decode_lengths = [x-1 for x in lengths]
         sentence_batch = pack_padded_sequence(sentence_batch,
-                                                 decode_lengths,
+                                                 lengths,
                                                  batch_first=True,
                                                  enforce_sorted=False).data
         y_out = pack_padded_sequence(y_out,
-                                      decode_lengths,
+                                      lengths,
                                       batch_first=True,
                                       enforce_sorted=False).data
 
@@ -439,8 +438,6 @@ def valid(model, language, loader, text_proc, logger):
     loss = torch.nn.CrossEntropyLoss()
 
     for val_iter, data in enumerate(loader):
-
-        print("val iter:", val_iter)
         
         with torch.no_grad():
             (img_batch, sentence_batch, captions, video_prefixes, lengths) = data
@@ -454,24 +451,8 @@ def valid(model, language, loader, text_proc, logger):
 
             t_model_start = time.time()
             y_out = model(language, img_batch, sentence_batch.size(1), sentence_batch)
-            n_ex, vocab_len = y_out.view(-1, len(text_proc.vocab)).shape
-
-            sentence_batch = sentence_batch[:,1:]
-            decode_lengths = [x-1 for x in lengths]
-            sentence_batch  = pack_padded_sequence(sentence_batch,
-                                                     decode_lengths,
-                                                     batch_first=True,
-                                                     enforce_sorted=False).data
-            y_out  = pack_padded_sequence(y_out,
-                                          decode_lengths,
-                                          batch_first=True,
-                                          enforce_sorted=False).data
 
             for ii, image_id in enumerate(video_prefixes):    
-                # print("wid:", captions[ii][0])
-                # caption_list = [text_proc.vocab.itos[wid.item()] for wid in captions[ii] if wid!= 0]                
-                # caption_list = caption_list[1:-2]
-                # caption = ' '.join(caption_list)
                 padded_result = [text_proc.vocab.itos[torch.argmax(one_hot_en).item()] for one_hot_en in y_out[ii]]
                 result_list = []
                 for word in padded_result:
@@ -485,8 +466,21 @@ def valid(model, language, loader, text_proc, logger):
                     gts[image_id] = [captions[ii]]
                 res[image_id] = [result]
 
-                logging.info("for image {}, gts: {}\tres:{}".format(image_id, captions[ii], result))
+                logging.info("for image {}, gts: {}\tres: {}".format(image_id, captions[ii], result))
 
+
+            # sentence_batch = sentence_batch[:,1:]
+            # decode_lengths = [x-1 for x in lengths]
+            sentence_batch  = pack_padded_sequence(sentence_batch,
+                                                     lengths,
+                                                     # decode_lengths,
+                                                     batch_first=True,
+                                                     enforce_sorted=False).data
+            y_out  = pack_padded_sequence(y_out,
+                                          lengths,
+                                          # decode_lengths,
+                                          batch_first=True,
+                                          enforce_sorted=False).data
             batch_loss = loss(y_out, sentence_batch)
             epoch_loss += batch_loss.item()
 

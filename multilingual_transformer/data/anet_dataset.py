@@ -114,9 +114,7 @@ class ANetDataset(Dataset):
 
         if language != "en" and language != "ch":
             raise Exception("Error in language: {} not recognized".format(language))
-        print("LANGUAGE:", language)
-        print("split:", split)
-        print("len text_proc vocab:", len(text_proc.vocab))
+        print("language: {}, split: {}, vocab size: {}".format(language, split, len(text_proc.vocab)))
 
         self.process_ann = lambda x: x.strip()
         if language == "en":
@@ -138,10 +136,7 @@ class ANetDataset(Dataset):
                         ann = self.process_ann(ann)
                         train_sentences.append(ann)
 
-            print("len train sents 1:", len(train_sentences))
             train_sentences = list(map(text_proc.preprocess, train_sentences))
-
-            print("len(train_sents):", len(train_sentences))
             sentence_idx = text_proc.numericalize(text_proc.pad(train_sentences))#,
                                                        # device=-1)  # put in memory
 
@@ -224,7 +219,5 @@ def anet_collate_fn(batch_lst):
     for i, sent in enumerate(sentence_batch):
         end = lengths[i]
         targets[i, :end] = sent[:end]
-
-    # print("sentence batch shape: {}, targets shape: {}".format(sentence_batch.shape, targets.shape))
 
     return (img_batch, sentence_batch, sentences, video_prefixes, lengths)
