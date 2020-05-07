@@ -387,14 +387,14 @@ def train(epoch, model, optimizer, language, train_loader, len_vocab, args):
         t_model_start = time.time()
         y_out = model(language, img_batch, sentence_batch.size(1), sentence_batch)
 
-        # sentence_batch = sentence_batch[:,1:]
-        # decode_lengths = [x-1 for x in lengths]
+        sentence_batch = sentence_batch[:,1:]
+        decode_lengths = [x-1 for x in lengths]
         sentence_batch = pack_padded_sequence(sentence_batch,
-                                                 lengths,
+                                                 decode_lengths,
                                                  batch_first=True,
                                                  enforce_sorted=False).data
         y_out = pack_padded_sequence(y_out,
-                                      lengths,
+                                      decode_lengths,
                                       batch_first=True,
                                       enforce_sorted=False).data
 
@@ -469,16 +469,16 @@ def valid(model, language, loader, text_proc, logger):
                 logging.info("for image {}, gts: {}\tres: {}".format(image_id, captions[ii], result))
 
 
-            # sentence_batch = sentence_batch[:,1:]
-            # decode_lengths = [x-1 for x in lengths]
+            sentence_batch = sentence_batch[:,1:]
+            decode_lengths = [x-1 for x in lengths]
             sentence_batch  = pack_padded_sequence(sentence_batch,
-                                                     lengths,
-                                                     # decode_lengths,
+                                            #          lengths,
+                                                     decode_lengths,
                                                      batch_first=True,
                                                      enforce_sorted=False).data
             y_out  = pack_padded_sequence(y_out,
-                                          lengths,
-                                          # decode_lengths,
+                                          # lengths,
+                                          decode_lengths,
                                           batch_first=True,
                                           enforce_sorted=False).data
             batch_loss = loss(y_out, sentence_batch)
