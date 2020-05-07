@@ -48,9 +48,9 @@ def main(args):
 	val_json = make_sample(args.data, args.val_json, args.frac, args.dest, "val")
 
 	print("Writing final json file...")
-	master_json = train_json.extend(val_json)
-	with open(os.path.join(dest, "vatex_subsample_v1.0.json".format(stype)), "w") as f:
-		json.dump(master_json, f)
+	master_json = np.append(train_json, val_json)
+	with open(os.path.join(args.dest, "vatex_subsample_v1.0.json"), "w") as f:
+		json.dump(master_json.tolist(), f, indent=2)
 
 if __name__ == "__main__":
     main(args)
