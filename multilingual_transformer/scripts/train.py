@@ -242,6 +242,7 @@ def main(args):
         else:
             raise
 
+    print("GPU available?", torch.cuda.is_available())
     print('loading dataset')
     loader_dict, text_proc, train_sampler = get_dataset(args)
 
@@ -376,8 +377,6 @@ def train(epoch, model, optimizer, language, train_loader, len_vocab, args):
         t_model_start = time.time()
         y_out = model(img_batch, sentence_batch.size(1), sentence_batch)
         n_ex, vocab_len = y_out.view(-1, len_vocab).shape
-        print("y_out shape:", y_out.shape)
-        print("n_ex, vocab_len:", n_ex, vocab_len)
 
         sentence_batch = sentence_batch[:,1:]
         decode_lengths = [x-1 for x in lengths]
@@ -441,13 +440,11 @@ def valid(model, language, loader, text_proc, logger):
             # sentence_batch = Variable(sentence_batch)
 
             if torch.cuda.is_available():
-                features, captions = features.cuda(), captions.cuda()
+                img_batch, sentence_batch = img_batch.cuda(), sentence_batch.cuda()
 
             t_model_start = time.time()
             y_out = model(img_batch, sentence_batch.size(1), sentence_batch)
             n_ex, vocab_len = y_out.view(-1, len(text_proc.vocab)).shape
-            # print("y_out shape:", y_out.shape)
-            # print("n_ex, vocab_len:", n_ex, vocab_len)
 
             sentence_batch = sentence_batch[:,1:]
             decode_lengths = [x-1 for x in lengths]
