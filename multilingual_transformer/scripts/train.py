@@ -55,8 +55,6 @@ parser.add_argument('--num_workers', default=1, type=int)
 # Model settings: General
 parser.add_argument('--d_model', default=1024, type=int, help='size of the rnn in number of hidden nodes in each layer')
 parser.add_argument('--d_hidden', default=2048, type=int)
-parser.add_argument('--n_heads', default=8, type=int)
-parser.add_argument('--in_emb_dropout', default=0.1, type=float)
 parser.add_argument('--attn_dropout', default=0.2, type=float)
 parser.add_argument('--vis_emb_dropout', default=0.1, type=float)
 parser.add_argument('--cap_dropout', default=0.2, type=float)
@@ -79,10 +77,8 @@ parser.add_argument('--teacher_forcing', type=float, default=0, help='teacher fo
 parser.add_argument('--alpha', default=0.95, type=float, help='alpha for adagrad/rmsprop/momentum/adam')
 parser.add_argument('--beta', default=0.999, type=float, help='beta used for adam')
 parser.add_argument('--epsilon', default=1e-8, help='epsilon that goes into denominator for smoothing')
-parser.add_argument('--loss_alpha_r', default=2, type=int, help='The weight for regression loss')
 parser.add_argument('--patience_epoch', default=1, type=int, help='Epoch to wait to determine a pateau')
 parser.add_argument('--reduce_factor', default=0.5, type=float, help='Factor of learning rate reduction')
-parser.add_argument('--grad_norm', default=1, type=float, help='Gradient clipping norm')
 
 # Data parallel
 parser.add_argument('--dist_url', default='file:///home/luozhou/nonexistent_file', type=str, help='url used to set up distributed training')
@@ -256,18 +252,18 @@ def main(args):
     # filter params that don't require gradient (credit: PyTorch Forum issue 679)
     # smaller learning rate for the decoder
     if args.optim == 'adam':
-        # optimizer = optim.Adam(
-        #     filter(lambda p: p.requires_grad, model.parameters()),
-        #     args.learning_rate, betas=(args.alpha, args.beta), eps=args.epsilon)
-        optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)
+        optimizer = optim.Adam(
+            filter(lambda p: p.requires_grad, model.parameters()),
+            args.learning_rate, betas=(args.alpha, args.beta), eps=args.epsilon)
+        # optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)
     elif args.optim == 'sgd':
-        # optimizer = optim.SGD(
-        #     filter(lambda p: p.requires_grad, model.parameters()),
-        #     args.learning_rate,
-        #     weight_decay=1e-5,
-        #     momentum=args.alpha,
-        #     nesterov=True
-        # )
+        optimizer = optim.SGD(
+            filter(lambda p: p.requires_grad, model.parameters()),
+            args.learning_rate,
+            weight_decay=1e-5,
+            momentum=args.alpha,
+            nesterov=True
+        )
         optimizer = optim.SGD(model.parameters(),
                               lr=args.learning_rate,
                               momentum = 0.899999976158,
@@ -356,15 +352,6 @@ def main(args):
             epoch_loss, valid_loss, time.time()-t_epoch_start
         ))
 
-        # logging.info("Inference at train epoch {}".format(train_epoch))
-        # x, y, video_prefix = next(iter(loader_dict[curr_lang + "valid"]))
-        # proposed_sents = model.inference(x, curr_lang)
-        # logging.info("proposed sentences:")
-        # for m, prop in enumerate(proposed_sents):
-        #     logging.info("video: {}, sentence: {}".format(video_prefix[m].split("/")[-1],
-        #         prop[0][3]))
-        # logging.info('-'*80)
-
         print('-'*80)
 
 ### Training the network ###
@@ -403,23 +390,14 @@ def train(epoch, model, optimizer, language, train_loader, len_vocab, args):
                                       enforce_sorted=False).data
 
         batch_loss = loss(y_out, sentence_batch)
+        # if scst_loss is not None:
+        #     scst_loss *= args.scst_weight
+        #     total_loss += scst_loss
         epoch_loss += batch_loss.item()
 
         optimizer.zero_grad()
         batch_loss.backward()
         optimizer.step()
-
-        # cls_loss = model.bce_loss(pred_score, gt_score) * args.cls_weight
-        # sent_loss = F.cross_entropy(pred_sentence, gt_sent) * args.sent_weight
-
-        # total_loss = cls_loss + sent_loss
-
-        # if scst_loss is not None:
-        #     scst_loss *= args.scst_weight
-        #     total_loss += scst_loss
-
-        # optimizer.zero_grad()
-        # total_loss.backward()
 
         t_model_end = time.time()
 
