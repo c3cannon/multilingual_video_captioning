@@ -7,36 +7,43 @@ def parse_opt():
     parser.add_argument(
         '--input_json',
         type=str,
-        default='vatex_training.json',
+        default='data_subset/vatex_subsample_v1.0.json',
         help='path to the json file containing video info')
 
     parser.add_argument(
         '--eng_caption_json',
         type=str,
-        default="caption_train_english.json",
+        default="data_subset/caption_eng_subsample_v1.0.json",
         help='path to the processed video caption json')
     parser.add_argument(
         '--eng_info_json',
         type=str,
-        default='info_train_english.json',
+        default='data_subset/info_eng_subsample_v1.0.json',
         help='path to the json file containing additional info and vocab')
 
     parser.add_argument(
         '--chin_caption_json',
         type=str,
-        default="caption_train_chinese.json",
+        default="data_subset/caption_chin_subsample_v1.0.json",
         help='path to the processed video caption json')
     parser.add_argument(
         '--chin_info_json',
         type=str,
-        default='info_train_chinese.json',
+        default='data_subset/info_chin_subsample_v1.0.json',
         help='path to the json file containing additional info and vocab')
 
-    parser.add_argument('--i3d_feats_dir', type=str, default="train_val_data")
+    parser.add_argument('--i3d_feats_dir', type=str, default="data_subset/train")
     parser.add_argument(
-        '--cached_tokens',
+        '--chinese_tokens',
         type=str,
-        default='vatex_training-idxs',
+        default='data_subset/vatex_eng_subsample_v1.0-idxs',
+        help='Cached token file for calculating cider score \
+                            during self critical training.')
+
+    parser.add_argument(
+        '--english_tokens',
+        type=str,
+        default='data_subset/vatex_eng_subsample_v1.0-idxs',
         help='Cached token file for calculating cider score \
                             during self critical training.')
 
@@ -52,7 +59,7 @@ def parse_opt():
     parser.add_argument(
         "--bidirectional_enc",
         type=int,
-        default=1,
+        default=0,
         help="0 for disable, 1 for enable. encoder bidirectional.")
     parser.add_argument(
         "--bidirectional_dec",
@@ -97,7 +104,7 @@ def parse_opt():
     # Optimization: General
 
     parser.add_argument(
-        '--epochs', type=int, default=100, help='number of epochs')
+        '--epochs', type=int, default=1000, help='number of epochs')
     parser.add_argument(
         '--batch_size', type=int, default=128, help='minibatch size')
     parser.add_argument(
@@ -133,12 +140,12 @@ def parse_opt():
     parser.add_argument(
         '--save_checkpoint_every',
         type=int,
-        default=10,
+        default=1,
         help='how often to save a model checkpoint (in epoch)?')
     parser.add_argument(
         '--checkpoint_path',
         type=str,
-        default="save",
+        default="save/data_small",
         help='directory to store checkpointed models')
 
     parser.add_argument(
@@ -150,7 +157,7 @@ def parse_opt():
     parser.add_argument(
         '--self_crit_after',
         type=int,
-        default=-1,
+        default=650,
         help='After what epoch do we start finetuning the CNN? \
                         (-1 = disable; never finetune, 0 = finetune from start)'
     )

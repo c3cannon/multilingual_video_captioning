@@ -23,8 +23,6 @@ def train(engLoader, chinLoader, model, crit, optimizer, lr_scheduler, opt, rl_c
 
         iteration = 0
 
-        # If start self crit training
-
         if epoch % 2 == 1:
 
             if opt["self_crit_after"] != -1 and epoch >= opt["self_crit_after"]:
@@ -34,10 +32,10 @@ def train(engLoader, chinLoader, model, crit, optimizer, lr_scheduler, opt, rl_c
                 sc_flag = False
 
             for data in engLoader:
-                #torch.cuda.synchronize()
-                i3d_feats = data['i3d_feats'].squeeze(1) #.cuda()
-                labels = data['labels'] #.cuda()
-                masks = data['masks'] #.cuda()
+                torch.cuda.synchronize()
+                i3d_feats = data['i3d_feats'].squeeze(1).cuda()
+                labels = data['labels'].cuda()
+                masks = data['masks'].cuda()
 
                 if not sc_flag:
                     seq_probs, _ = model(i3d_feats, labels, 'train')
@@ -49,13 +47,13 @@ def train(engLoader, chinLoader, model, crit, optimizer, lr_scheduler, opt, rl_c
                                                       seq_preds)
                     print(reward.shape)
                     loss = rl_crit(seq_probs, seq_preds,
-                                   torch.from_numpy(reward).float()) #.cuda())
+                                   torch.from_numpy(reward).float().cuda())
                 
                 loss.backward()
                 clip_grad_value_(model.parameters(), opt['grad_clip'])
                 optimizer.step()
                 train_loss = loss.item()
-                #torch.cuda.synchronize()
+                torch.cuda.synchronize()
 
                 iteration += 1
                 
@@ -67,6 +65,7 @@ def train(engLoader, chinLoader, model, crit, optimizer, lr_scheduler, opt, rl_c
                           (iteration, epoch, np.mean(reward[:, 0])))
         else:
 
+            # If start self crit training
             if opt["self_crit_after"] != -1 and epoch >= opt["self_crit_after"]:
                 sc_flag = True
                 init_cider_scorer(opt["chinese_tokens"])
@@ -144,6 +143,10 @@ def main(opt):
         rnn_dropout_p=opt["rnn_dropout_p"],
         bidirectional=bool(opt["bidirectional_dec"]))
     model = S2VTAttModel(encoder, decoder)
+        # Ship the model to GPU, maybe
+    if torch.cuda.is_available():
+        print("USING GPU")
+        model = model.cuda()
     crit = utils.LanguageModelCriterion()
     rl_crit = utils.RewardCriterion()
     optimizer = optim.Adam(
