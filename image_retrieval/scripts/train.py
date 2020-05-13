@@ -204,7 +204,6 @@ def get_dataset(args):
 
     print("size of English val dataset:", len(en_valid_dataset))
     print("size of Chinese val dataset:", len(ch_valid_dataset))
-    en_valid_dataset, en_valid_loader, ch_valid_dataset, ch_valid_loader = None, None, None, None
 
     return ({"entrain":en_train_loader, "chtrain":ch_train_loader, 
             "envalid":en_valid_loader, "chvalid":ch_valid_loader}, en_text_proc, ch_text_proc, train_sampler)
@@ -442,38 +441,20 @@ def valid(model, language, loader, text_proc, logger):
                 img_batch, sentence_batch = img_batch.cuda(), sentence_batch.cuda()
 
             t_model_start = time.time()
-            y_out = model(language, img_batch, sentence_batch.size(1), sentence_batch)
+            y_out = model(language, sentence_batch, lengths, img_batch)
 
-            for ii, image_id in enumerate(video_prefixes):    
-                padded_result = [text_proc.vocab.itos[torch.argmax(one_hot_en).item()] for one_hot_en in y_out[ii]]
-                result_list = []
-                for word in padded_result:
-                    if word == '.' or word == '<eos>':
-                        break
-                    result_list.append(word)
-                result = ' '.join(result_list)
-                if image_id in gts:
-                    gts[image_id].append(captions[ii])
-                else:
-                    gts[image_id] = [captions[ii]]
-                res[image_id] = [result]
+            # for ii, image_id in enumerate(video_prefixes):    
+                # if image_id in gts:
+                    # gts[image_id].append(y_out)
+                # else:
+                    # gts[image_id] = [captions[ii]]
+                    # res[image_id] = [result]
 
-                logging.info("for image {}, gts: {}\tres: {}".format(image_id, captions[ii], result))
+                # logging.info("for image {}, gts: {}\tres: {}".format(image_id, captions[ii], result))
 
+            flat_img_batch = torch.flatten(img_batch, start_dim=1)
 
-            sentence_batch = sentence_batch[:,1:]
-            decode_lengths = [x-1 for x in lengths]
-            sentence_batch  = pack_padded_sequence(sentence_batch,
-                                            #          lengths,
-                                                     decode_lengths,
-                                                     batch_first=True,
-                                                     enforce_sorted=False).data
-            y_out  = pack_padded_sequence(y_out,
-                                          # lengths,
-                                          decode_lengths,
-                                          batch_first=True,
-                                          enforce_sorted=False).data
-            batch_loss = loss(y_out, sentence_batch)
+            batch_loss = loss(y_out, flat_img_batch)
             epoch_loss += batch_loss.item()
 
             t_model_end = time.time()

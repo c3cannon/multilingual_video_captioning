@@ -314,13 +314,12 @@ def main(args):
 
         epoch_loss = train(train_epoch, model, optimizer,
                            curr_lang, loader_dict[curr_lang + "train"],
-                           len(text_proc.vocab), args)
+                           len(text_proc.vocab), text_proc, args)
         all_training_losses.append(epoch_loss)
 
         valid_loss = valid(model, curr_lang,
                            loader_dict[curr_lang + "valid"],
-                           text_proc,
-                           logging)
+                           text_proc)
         all_valid_losses.append(valid_loss)
 
         if valid_loss < best_loss:
@@ -365,7 +364,7 @@ def main(args):
         print('-'*80)
 
 ### Training the network ###
-def train(epoch, model, optimizer, language, train_loader, len_vocab, args):
+def train(epoch, model, optimizer, language, train_loader, len_vocab, text_proc, args):
     model.train() # training mode
     train_loss = []
     nbatches = len(train_loader)
@@ -386,6 +385,21 @@ def train(epoch, model, optimizer, language, train_loader, len_vocab, args):
 
         t_model_start = time.time()
         y_out = model(language, img_batch, sentence_batch.size(1), sentence_batch)
+        if train_iter == len(train_loader) // 2:
+            for ii, image_id in enumerate(video_prefixes):    
+                padded_result = [text_proc.vocab.itos[torch.argmax(one_hot_en).item()] for one_hot_en in y_out[ii]]
+                result_list = []
+                for word in padded_result:
+                    if word == '.' or word == '<eos>':
+                        result_list.append('<eos>')
+                        break
+                    result_list.append(word)
+                result = ' '.join(result_list)
+
+                if len(result) == 0:
+                    logging.info("for image {} in epoch {} train iter {}, gts: {}\tres: {}".format(image_id, epoch, train_iter, captions[ii], "empty result"))
+                else:
+                    logging.info("for image {} in epoch {} train iter {}, gts: {}\tres: {}".format(image_id, epoch, train_iter, captions[ii], result)) 
 
         sentence_batch = sentence_batch[:,1:]
         decode_lengths = [x-1 for x in lengths]
@@ -424,14 +438,11 @@ def train(epoch, model, optimizer, language, train_loader, len_vocab, args):
 
 
 ### Validation ##
-def valid(model, language, loader, text_proc, logger):
+def valid(model, language, loader, text_proc):
     model.eval()
 
 
     epoch_loss = 0
-
-    gts = {}
-    res = {}
 
     nbatches = len(loader)
     t_iter_start = time.time()
@@ -454,19 +465,20 @@ def valid(model, language, loader, text_proc, logger):
 
             for ii, image_id in enumerate(video_prefixes):    
                 padded_result = [text_proc.vocab.itos[torch.argmax(one_hot_en).item()] for one_hot_en in y_out[ii]]
+                # print("len padded_result:", len(padded_result))
+                print("padded_result[0]:", padded_result[0])
                 result_list = []
                 for word in padded_result:
                     if word == '.' or word == '<eos>':
+                        result_list.append('<eos>')
                         break
                     result_list.append(word)
                 result = ' '.join(result_list)
-                if image_id in gts:
-                    gts[image_id].append(captions[ii])
-                else:
-                    gts[image_id] = [captions[ii]]
-                res[image_id] = [result]
 
-                logging.info("for image {}, gts: {}\tres: {}".format(image_id, captions[ii], result))
+                if len(result) == 0:
+                    logging.info("for image {}, gts: {}\tres: {}".format(image_id, captions[ii], "empty result"))
+                else:
+                    logging.info("for image {}, gts: {}\tres: {}".format(image_id, captions[ii], result)) 
 
 
             sentence_batch = sentence_batch[:,1:]
