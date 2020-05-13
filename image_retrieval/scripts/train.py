@@ -28,6 +28,7 @@ import torch.utils.data.distributed
 # misc
 from data.anet_dataset import ANetDataset, anet_collate_fn, get_vocab_and_sentences
 from model.encoder_lstm import EncoderRNN, DecoderRNN, S2VTAttModel
+from annoy import AnnoyIndex
 
 from data.utils import update_values
 
@@ -49,8 +50,13 @@ parser.add_argument('--save_valid_samplelist', action='store_true')
 parser.add_argument('--load_valid_samplelist', action='store_true')
 parser.add_argument('--valid_samplelist_path', type=str, default='/z/home/luozhou/subsystem/densecap_vid/valid_samplelist.pkl')
 parser.add_argument('--start_from', default='', help='path to a model checkpoint to initialize model weights from. Empty = dont')
+parser.add_argument('--load_nn', default='', type=str)
+parser.add_argument('--save_nn', default='', type=str)
+parser.add_argument('--num_trees', default=500, type=int)
+parser.add_argument('--num_neighbors', default=5, type=int)
 parser.add_argument('--max_sentence_len', default=20, type=int)
 parser.add_argument('--num_workers', default=1, type=int)
+parser.add_argument('--mode', default='train', type=str, help='possible modes are \'train\' and \'inference\'')
 
 # Model settings: General
 parser.add_argument('--d_model', default=1024, type=int, help='size of the rnn in number of hidden nodes in each layer')
@@ -255,6 +261,11 @@ def main(args):
 
     print('building model')
     model = get_model(en_text_proc, ch_text_proc, args)
+
+    if args.mode == 'inference':
+        for language in ["en", "ch"]:
+            inference(model, language, loader_dict[language + "valid"])
+        return
 
     # filter params that don't require gradient (credit: PyTorch Forum issue 679)
     # smaller learning rate for the decoder
@@ -470,6 +481,85 @@ def valid(model, language, loader, text_proc, logger):
         epoch_loss = epoch_loss/nbatches
 
     return epoch_loss
+
+def inference(model, language, loader):
+    print("Inference for {} language".format(language))
+    model.eval()
+
+    img_feats = []
+    img_dim = 32
+    vid_names = {}
+    vid_ctr = 0
+    for split in ["train","val"]:
+        fpath = ""
+        if split == "train":
+            fpath = args.train_data_folder
+        else:
+            fpath = args.val_data_folder
+        for i, vid in enumerate(os.listdir(fpath)):
+            vid_names[vid_ctr] = os.path.join(split, vid)
+            img_feat = np.squeeze(np.load(os.path.join(fpath, vid)))
+            if img_feat.shape[0] != img_dim:
+                odd_size = img_dim - img_feat.shape[0]
+                img_feat = np.pad(img_feat,
+                                  ((0, odd_size), (0, 0)),
+                                  mode="constant",
+                                  constant_values=0)
+            img_feat = img_feat.reshape((img_dim*1024))
+            img_feats.append(img_feat)
+            vid_ctr += 1
+
+    num_feats = 32*args.image_feat_size
+    t = AnnoyIndex(num_feats, 'euclidean')
+    if len(args.load_nn) > 0:
+        print("loading nearest neighbors")
+        t.load(args.load_nn, prefault=True)
+    else:
+        print("creating nearest neighbors")
+        t.set_seed(42)
+        for i, row in enumerate(img_feats):
+            t.add_item(i, row)
+        t.build(args.num_trees)
+        t.save(args.save_nn)
+
+    nbatches = len(loader)
+    t_iter_start = time.time()
+
+    for val_iter, data in enumerate(loader):
+        
+        with torch.no_grad():
+            (img_batch, sentence_batch, captions, video_prefixes, lengths) = data
+            
+            # img_batch = Variable(img_batch)
+            # sentence_batch = Variable(sentence_batch)
+
+            if torch.cuda.is_available():
+                img_batch, sentence_batch = img_batch.cuda(), sentence_batch.cuda()
+
+            y_out = model(language, sentence_batch, lengths, img_batch)
+
+            for i, row in enumerate(y_out):
+                # print("query caption: {}".format(captions[i]))
+                # print("ground truth video: {}".format(video_prefixes[i]))
+                neighbors = t.get_nns_by_vector(row, args.num_neighbors)
+                for neighbor in neighbors:
+                    print(vid_names[neighbor], np.linalg.norm(t.get_item_vector(neighbor) - row.numpy()))
+
+                logging.info('query caption: {}\n'
+                      'ground truth video: {}\n'
+                      '1 nearest neighbor: {}\n'
+                      '2 nearest neighbor: {}\n'
+                      '3 nearest neighbor: {}\n'
+                      '4 nearest neighbor: {}\n'
+                      '5 nearest neighbor: {}\n'.format(
+                    caption,
+                    video_prefixes[j],
+                    vid_names[neighbors[0]],
+                    vid_names[neighbors[1]],
+                    vid_names[neighbors[2]],
+                    vid_names[neighbors[3]],
+                    vid_names[neighbors[4]]
+                ))
 
 
 if __name__ == "__main__":
