@@ -397,8 +397,7 @@ def train(epoch, model, optimizer, language, train_loader, len_vocab, args):
         if torch.cuda.is_available():
             img_batch, sentence_batch = img_batch.cuda(), sentence_batch.cuda()
         
-
-        y_out = model(language, sentence_batch, lengths, img_batch)
+        y_out = model(language, sentence_batch, lengths, img_batch, mode='inference')
 
         flat_img_batch = torch.flatten(img_batch, start_dim=1)
         batch_loss = loss(y_out, flat_img_batch)
@@ -443,6 +442,7 @@ def valid(model, language, loader, text_proc, logger):
         
         with torch.no_grad():
             (img_batch, sentence_batch, captions, video_prefixes, lengths) = data
+            print(img_batch.shape)
             
             len_captions = len(captions[0])
             # img_batch = Variable(img_batch)
@@ -452,7 +452,8 @@ def valid(model, language, loader, text_proc, logger):
                 img_batch, sentence_batch = img_batch.cuda(), sentence_batch.cuda()
 
             t_model_start = time.time()
-            y_out = model(language, sentence_batch, lengths, img_batch)
+            y_out = model(language, sentence_batch, lengths, mode='inference')
+            # y_out = y_out.view(len(img_batch), 33*args.image_feat_size)
 
             # for ii, image_id in enumerate(video_prefixes):    
                 # if image_id in gts:
@@ -505,7 +506,7 @@ def inference(model, language, loader):
                                   ((0, odd_size), (0, 0)),
                                   mode="constant",
                                   constant_values=0)
-            img_feat = img_feat.reshape((img_dim*1024))
+            img_feat = img_feat.reshape((img_dim*args.image_feat_size))
             img_feats.append(img_feat)
             vid_ctr += 1
 
@@ -522,9 +523,6 @@ def inference(model, language, loader):
         t.build(args.num_trees)
         t.save(args.save_nn)
 
-    nbatches = len(loader)
-    t_iter_start = time.time()
-
     for val_iter, data in enumerate(loader):
         
         with torch.no_grad():
@@ -536,7 +534,7 @@ def inference(model, language, loader):
             if torch.cuda.is_available():
                 img_batch, sentence_batch = img_batch.cuda(), sentence_batch.cuda()
 
-            y_out = model(language, sentence_batch, lengths, img_batch)
+            y_out = model(language, sentence_batch, lengths, img_batch, mode='train')
 
             for i, row in enumerate(y_out):
                 # print("query caption: {}".format(captions[i]))

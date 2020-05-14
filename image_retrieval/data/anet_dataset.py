@@ -188,8 +188,8 @@ class ANetDataset(Dataset):
         if img_feat.size()[0] != 32:
             odd_size = img_feat.size()[0]
             img_feat = F.pad(img_feat, pad=(0,0,0,32-odd_size), mode="constant", value=0)
+        img_feat = torch.cat((torch.ones(1, 1024), img_feat)) # add bias term to each column
 
-        
         return (sentence, sentence_idx, img_feat, video_prefix)
 
 def anet_collate_fn(batch_lst):
@@ -200,10 +200,10 @@ def anet_collate_fn(batch_lst):
     batch_size = len(batch_lst)
 
     sentence_batch = torch.LongTensor(np.ones((batch_size, sentence_idx.size(0) - 1), dtype='int64'))
-    # sentence_batch = [None]*batch_size
     img_batch = torch.FloatTensor(np.zeros((batch_size,
                                             img_feat.size(0),
                                             img_feat.size(1))))
+
     video_prefixes = [None]*batch_size
     sentences = [None]*batch_size
     lengths = [None]*batch_size
