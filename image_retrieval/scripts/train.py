@@ -548,7 +548,6 @@ def inference(model, language, loader):
                     vid_names[neighbors[2]],
                     vid_names[neighbors[3]],
                     vid_names[neighbors[4]]
-                ))
 
 
 if __name__ == "__main__":
