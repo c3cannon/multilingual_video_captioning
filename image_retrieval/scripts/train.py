@@ -397,7 +397,7 @@ def train(epoch, model, optimizer, language, train_loader, len_vocab, args):
         if torch.cuda.is_available():
             img_batch, sentence_batch = img_batch.cuda(), sentence_batch.cuda()
         
-        y_out = model(language, sentence_batch, lengths, img_batch, mode='inference')
+        y_out = model(language, sentence_batch, lengths, img_batch, mode='train')
 
         flat_img_batch = torch.flatten(img_batch, start_dim=1)
         batch_loss = loss(y_out, flat_img_batch)
@@ -453,16 +453,6 @@ def valid(model, language, loader, text_proc, logger):
 
             t_model_start = time.time()
             y_out = model(language, sentence_batch, lengths, mode='inference')
-            # y_out = y_out.view(len(img_batch), 33*args.image_feat_size)
-
-            # for ii, image_id in enumerate(video_prefixes):    
-                # if image_id in gts:
-                    # gts[image_id].append(y_out)
-                # else:
-                    # gts[image_id] = [captions[ii]]
-                    # res[image_id] = [result]
-
-                # logging.info("for image {}, gts: {}\tres: {}".format(image_id, captions[ii], result))
 
             flat_img_batch = torch.flatten(img_batch, start_dim=1)
 
@@ -534,29 +524,31 @@ def inference(model, language, loader):
             if torch.cuda.is_available():
                 img_batch, sentence_batch = img_batch.cuda(), sentence_batch.cuda()
 
-            y_out = model(language, sentence_batch, lengths, img_batch, mode='train')
+            y_out = model(language, sentence_batch, lengths, img_batch, mode='inference')
 
             for i, row in enumerate(y_out):
-                # print("query caption: {}".format(captions[i]))
-                # print("ground truth video: {}".format(video_prefixes[i]))
-                neighbors = t.get_nns_by_vector(row, args.num_neighbors)
+                img_features = row[1024:]
+                neighbors = t.get_nns_by_vector(img_features, args.num_neighbors)
+                dists = []
                 for neighbor in neighbors:
-                    print(vid_names[neighbor], np.linalg.norm(t.get_item_vector(neighbor) - row.numpy()))
+                    dists.append(np.linalg.norm(t.get_item_vector(neighbor) - img_features.numpy()))
+                    print(vid_names[neighbor], dists[-1])
+                print()
 
                 logging.info('query caption: {}\n'
                       'ground truth video: {}\n'
-                      '1 nearest neighbor: {}\n'
-                      '2 nearest neighbor: {}\n'
-                      '3 nearest neighbor: {}\n'
-                      '4 nearest neighbor: {}\n'
-                      '5 nearest neighbor: {}\n'.format(
-                    caption,
-                    video_prefixes[j],
-                    vid_names[neighbors[0]],
-                    vid_names[neighbors[1]],
-                    vid_names[neighbors[2]],
-                    vid_names[neighbors[3]],
-                    vid_names[neighbors[4]]
+                      '1 nearest neighbor: {}, dist: {}\n'
+                      '2 nearest neighbor: {}, dist: {}\n'
+                      '3 nearest neighbor: {}, dist: {}\n'
+                      '4 nearest neighbor: {}, dist: {}\n'
+                      '5 nearest neighbor: {}, dist: {}\n'.format(
+                    captions[i],
+                    video_prefixes[i],
+                    vid_names[neighbors[0]], dists[0],
+                    vid_names[neighbors[1]], dists[1],
+                    vid_names[neighbors[2]], dists[2],
+                    vid_names[neighbors[3]], dists[3],
+                    vid_names[neighbors[4]], dists[4]
                 ))
 
 
