@@ -189,6 +189,8 @@ class DecoderRNN(nn.Module):
                 current_state = None
                 if t == 0:
                     current_state = torch.ones(len(encoder_outputs), IMG_COLS)
+                    if torch.cuda.is_available():
+                        current_state = current_state.cuda()
                 else:
                     current_state = seq_preds[-1].view(decoder_output.shape[0], IMG_ROWS, IMG_COLS)[:,t,:]
                 if isinstance(decoder_hidden, tuple):
