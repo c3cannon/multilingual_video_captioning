@@ -29,6 +29,7 @@ import torch.utils.data.distributed
 from data.anet_dataset import ANetDataset, anet_collate_fn, get_vocab_and_sentences
 from model.encoder_lstm import EncoderRNN, DecoderRNN, S2VTAttModel
 from annoy import AnnoyIndex
+from sklearn.neighbors import KDTree
 
 from data.utils import update_values
 
@@ -220,8 +221,8 @@ def get_model(en_text_proc, ch_text_proc, args):
     ch_sent_vocab = ch_text_proc.vocab
 
     enc = EncoderRNN(args.d_word_emb, len(en_sent_vocab), len(ch_sent_vocab),
-        args.d_hidden)
-    dec = DecoderRNN(args.d_word_emb, args.d_hidden)
+        args.d_hidden, rnn_cell='lstm')
+    dec = DecoderRNN(args.d_word_emb, args.d_hidden, rnn_cell='lstm')
     model = S2VTAttModel(enc, dec)
 
     # Initialize the networks and the criterion
@@ -375,6 +376,10 @@ def main(args):
 
         print('-'*80)
 
+def loss(x, y):
+    b = torch.norm((x - y), p=2, dim=1)
+    return torch.mean(b)
+
 ### Training the network ###
 def train(epoch, model, optimizer, language, train_loader, len_vocab, args):
     model.train() # training mode
@@ -383,7 +388,7 @@ def train(epoch, model, optimizer, language, train_loader, len_vocab, args):
     print("len trainloader:", nbatches)
     t_iter_start = time.time()
 
-    loss = torch.nn.MSELoss()
+    # loss = torch.nn.MSELoss()
 
     epoch_loss = 0
     for train_iter, data in enumerate(train_loader):        
@@ -400,7 +405,8 @@ def train(epoch, model, optimizer, language, train_loader, len_vocab, args):
         y_out = model(language, sentence_batch, lengths, img_batch, mode='train')
 
         flat_img_batch = torch.flatten(img_batch, start_dim=1)
-        batch_loss = loss(y_out, flat_img_batch)
+        batch_loss = loss(y_out[:,1024:], flat_img_batch[:,1024:])
+        b = torch.norm((y_out-flat_img_batch), p=2, dim=1)
         # if scst_loss is not None:
         #     scst_loss *= args.scst_weight
         #     total_loss += scst_loss
@@ -436,7 +442,7 @@ def valid(model, language, loader, text_proc, logger):
 
     nbatches = len(loader)
     t_iter_start = time.time()
-    loss = torch.nn.MSELoss()
+    # loss = torch.nn.MSELoss()
 
     for val_iter, data in enumerate(loader):
         
@@ -468,7 +474,7 @@ def valid(model, language, loader, text_proc, logger):
             ))
             t_iter_start = time.time()
 
-        epoch_loss = epoch_loss/nbatches
+    epoch_loss = epoch_loss/nbatches
 
     return epoch_loss
 
@@ -499,7 +505,8 @@ def inference(model, language, loader):
             img_feats.append(img_feat)
             vid_ctr += 1
 
-    num_feats = 32*args.image_feat_size
+    tree = KDTree(np.array(img_feats), leaf_size=100)
+    '''num_feats = 32*args.image_feat_size
     t = AnnoyIndex(num_feats, 'euclidean')
     if len(args.load_nn) > 0:
         print("loading nearest neighbors")
@@ -510,7 +517,7 @@ def inference(model, language, loader):
         for i, row in enumerate(img_feats):
             t.add_item(i, row)
         t.build(args.num_trees)
-        t.save(args.save_nn)
+        t.save(args.save_nn)'''
 
     for val_iter, data in enumerate(loader):
         
@@ -524,16 +531,24 @@ def inference(model, language, loader):
                 img_batch, sentence_batch = img_batch.cuda(), sentence_batch.cuda()
 
             y_out = model(language, sentence_batch, lengths, mode='inference')
+            print("Y_OUT.SHAPE:", y_out.shape)
+            print("Y_OUT[0]:", y_out[0])
+            print("Y_OUT[1]:", y_out[1])
 
             for i, row in enumerate(y_out):
                 # print("query caption: {}".format(captions[i]))
                 # print("ground truth video: {}".format(video_prefixes[i]))
-                trunc_row = row[1024:]
-                neighbors = t.get_nns_by_vector(trunc_row, args.num_neighbors)
-                for neighbor in neighbors:
-                    print(vid_names[neighbor], np.linalg.norm(t.get_item_vector(neighbor) - trunc_row.cpu().numpy()))
+                output_str = "query_caption: {}\nground truth video: {}\n".format(captions[i], video_prefixes[i])
+                trunc_row = row[None, 1024:].cpu().numpy()
+                # neighbors = t.get_nns_by_vector(trunc_row, args.num_neighbors)
+                dist, ind = tree.query(trunc_row, k=args.num_neighbors)
+                for j,neighbor in enumerate(ind[0]):
+                    # print(vid_names[neighbor], np.linalg.norm(t.get_item_vector(neighbor) - trunc_row.cpu().numpy()))
+                    output_str += "{} nearest neighbor: {}, dist: {}\n".format(j+1,
+                        vid_names[neighbor],
+                        dist[0][j])
 
-                printt()
+                '''print()
                 logging.info('query caption: {}\n'
                       'ground truth video: {}\n'
                       '1 nearest neighbor: {}\n'
@@ -547,7 +562,8 @@ def inference(model, language, loader):
                     vid_names[neighbors[1]],
                     vid_names[neighbors[2]],
                     vid_names[neighbors[3]],
-                    vid_names[neighbors[4]]
+                    vid_names[neighbors[4]]'''
+                logging.info(output_str)
 
 
 if __name__ == "__main__":

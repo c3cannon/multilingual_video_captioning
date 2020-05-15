@@ -84,7 +84,7 @@ class EncoderRNN(nn.Module):
         # cap_feats = self.input_dropout(cap_feats)
         # cap_feats = cap_feats.view(batch_size, seq_len, self.dim_hidden)
         self.rnn.flatten_parameters()
-        packed_output, (hidden, ct) = self.rnn(packed_input)
+        packed_output, hidden = self.rnn(packed_input)
         output, input_sizes = pad_packed_sequence(packed_output, batch_first=True)
 
         '''
@@ -166,15 +166,16 @@ class DecoderRNN(nn.Module):
         seq_preds = []
         out_tensor = None
         self.rnn.flatten_parameters()
+        if isinstance(decoder_hidden, tuple):
+            context = self.attention(decoder_hidden[0].squeeze(0), encoder_outputs)
+        else:
+            context = self.attention(decoder_hidden.squeeze(0), encoder_outputs)
 
         if mode == 'train':
             for i in range(IMG_ROWS):
                 current_state = targets[:, i, :] # use targets as rnn inputs
-                if isinstance(decoder_hidden, tuple):
-                    context = self.attention(decoder_hidden[0].squeeze(0), encoder_outputs)
-                else:
-                    context = self.attention(decoder_hidden.squeeze(0), encoder_outputs)
-
+                
+                # print("context shape: {}, current state shape: {}".format(context.shape, current_state.shape))
                 decoder_input = torch.cat([current_state, context], dim=1)
                 decoder_input = self.input_dropout(decoder_input).unsqueeze(1)
                 decoder_output, decoder_hidden = self.rnn(decoder_input, decoder_hidden)
@@ -183,8 +184,6 @@ class DecoderRNN(nn.Module):
             out_tensor = seq_preds[-1]
 
         elif mode == 'inference':
-            # if beam_size > 1: # maybe comment this out?
-            #     return self.sample_beam(encoder_outputs, decoder_hidden, opt)
             for t in range(IMG_ROWS - 1):
                 current_state = None
                 if t == 0:
@@ -193,13 +192,9 @@ class DecoderRNN(nn.Module):
                         current_state = current_state.cuda()
                 else:
                     current_state = seq_preds[-1].view(decoder_output.shape[0], IMG_ROWS, IMG_COLS)[:,t,:]
-                if isinstance(decoder_hidden, tuple):
-                    context = self.attention(decoder_hidden[0].squeeze(0), encoder_outputs)
-                else:
-                    context = self.attention(decoder_hidden.squeeze(0), encoder_outputs)
                 decoder_input = torch.cat([current_state, context], dim=1)
                 decoder_input = self.input_dropout(decoder_input).unsqueeze(1)
-                decoder_output, decoder_hidden = self.rnn(decoder_input, decoder_hidden)
+                decoder_output, decoder_hidden = self.rnn(decoder_input, (decoder_hidden))
 
                 seq_preds.append(self.out(decoder_output.squeeze(1)))
 
